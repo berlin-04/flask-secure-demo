@@ -18,7 +18,7 @@ jobs:
         run: docker build -t flask-demo-secure:ci .
 
       - name: scan vun
-        uses: aquasecurity/triver-action@master
+        uses: aquasecurity/trivy-action@master
         with:
            image-ref: docker build -t flask-demo-secure:ci 
            format: table
