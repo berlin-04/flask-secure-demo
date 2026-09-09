@@ -6,21 +6,83 @@ on:
   pull_request:
     branches: [main]
 
-
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Récupérer le code
         uses: actions/checkout@v4
 
       - name: Construire l'image Docker
-        run: docker build -t flask-demo-secure:ci .
+        run: docker build -t flask-secure-demo:ci .
 
-      - name: scan vun
+      - name: Scanner l'image avec Trivy
         uses: aquasecurity/trivy-action@master
         with:
-           image-ref: flask-demo-secure:ci 
-           format: table
-           exit-code: '0'
-           severity: 'CRITICAL,HIGH'
+          image-ref: flask-secure-demo:ci
+          format: table
+          exit-code: '0'
+          severity: 'CRITICAL'
+
+      - name: Exporter l'image en fichier
+        run: docker save flask-secure-demo:ci -o flask-secure-demo.tar
+
+      - name: Uploader l'artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flask-image
+          path: flask-secure-demo.tar
+
+  test:
+    runs-on: self-hosted
+    needs: build
+    steps:
+      - name: Nettoyer un éventuel conteneur résiduel
+        run: docker rm -f test-container || true
+
+      - name: Télécharger l'artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: flask-image
+
+      - name: Charger l'image Docker
+        run: docker load -i flask-secure-demo.tar
+
+      - name: Lancer le conteneur
+        run: docker run -d -p 5001:5000 --name test-container flask-secure-demo:ci
+
+      - name: Attendre le démarrage
+        run: sleep 5
+
+      - name: Tester la route /health
+        run: curl -f http://localhost:5001/health
+
+      - name: Nettoyer
+        run: docker stop test-container && docker rm test-container
+
+  deploy:
+    runs-on: self-hosted
+    needs: test
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Télécharger l'artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: flask-image
+
+      - name: Charger l'image Docker
+        run: docker load -i flask-secure-demo.tar
+
+      - name: Retagger l'image pour Compose
+        run: docker tag flask-secure-demo:ci flask-secure-demo-flask-app:latest
+
+      - name: S'assurer que postgres-db et redis tournent
+        run: docker compose up -d postgres-db redis
+
+      - name: Arrêter l'ancien conteneur Flask
+        run: docker stop flask-secure-demo-flask-app-1 || true && docker rm flask-secure-demo-flask-app-1 || true
+
+      - name: Lancer le nouveau conteneur Flask
+        run: docker compose up -d --no-build flask-app
