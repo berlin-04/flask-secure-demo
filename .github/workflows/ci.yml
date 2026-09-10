@@ -59,10 +59,27 @@ jobs:
 
       - name: Nettoyer
         run: docker stop test-container && docker rm test-container
+  
+  sast:
+    runs-on: self-hosted
+    steps:
+      - name: recup code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: telech bandit
+        run: pip install bandit 
+
+      - name: Run SAST scan
+        run: bandit -r . -x ./venv,./tests --exit-zero
 
   deploy:
     runs-on: self-hosted
-    needs: test
+    needs: [test, sast]
     steps:
       - name: Récupérer le code
         uses: actions/checkout@v4
