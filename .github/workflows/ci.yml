@@ -66,11 +66,6 @@ jobs:
       - name: recup code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: telech bandit
         run: pip install bandit 
 
